@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Global Drug Failure Map</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700&family=Share+Tech+Mono&display=swap');
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    background: #00000a;
+    color: #e0e8ff;
+    font-family: 'Share Tech Mono', monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+/* scan line effect */
+body::before {
+    content: '';
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none; z-index: 1;
+}
+
+.globe-section {
+    width: 100%; max-width: 900px;
+    padding: 40px;
+    position: relative;
+    z-index: 10;
+}
+.section-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 16px; color: #00ffcc; letter-spacing: 3px;
+    margin-bottom: 24px; text-align: center;
+    text-shadow: 0 0 10px rgba(0,255,204,0.3);
+}
+#outer-globe {
+    background: rgba(0,0,10,0.8);
+    border: 1px solid #ffffff0a;
+    border-radius: 20px;
+    padding: 32px;
+    position: relative;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    backdrop-filter: blur(10px);
+}
+#outer-globe::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, #00ffcc88, transparent);
+}
+
+#globe-wrap {
+    display: flex; flex-direction: column; align-items: center;
+}
+
+#stats { 
+    display: flex; gap: 48px; margin-bottom: 24px; 
+    border-bottom: 1px solid #ffffff0a;
+    padding-bottom: 24px;
+    width: 100%; justify-content: center;
+}
+.stat { text-align: center; }
+.stat-val {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 32px; font-weight: 700;
+    color: #00ffcc;
+    text-shadow: 0 0 20px rgba(0,255,204,0.4);
+    display: block; margin-bottom: 4px;
+}
+.stat-lbl { 
+    font-size: 11px; color: #5a7090; 
+    letter-spacing: 2px; 
+}
+
+canvas { display: block; margin: 0 auto; filter: drop-shadow(0 0 30px rgba(0,255,204,0.1)); }
+
+#info-bar {
+    font-size: 13px; color: #7090b0;
+    margin-top: 24px; min-height: 20px;
+    letter-spacing: 1px;
+}
+
+#legend {
+    display: flex; gap: 24px; margin-top: 16px;
+    flex-wrap: wrap; justify-content: center;
+}
+.leg-item { 
+    display: flex; align-items: center; gap: 8px; 
+    font-size: 12px; color: #5a7090; letter-spacing: 1px; 
+}
+.leg-dot { 
+    width: 10px; height: 10px; border-radius: 50%; 
+}
+</style>
+</head>
+<body>
+
+<div class="globe-section">
+    <div class="section-title">GLOBAL DRUG FAILURE MAP</div>
+    <div id="outer-globe">
+        <div id="globe-wrap">
+            <div id="stats">
+                <div class="stat"><div class="stat-val" id="total-count">0</div><div class="stat-lbl">TOTAL FAILURES</div></div>
+                <div class="stat"><div class="stat-val" id="crit-count">0</div><div class="stat-lbl">CRITICAL</div></div>
+                <div class="stat"><div class="stat-val" id="regions-count">0</div><div class="stat-lbl">REGIONS AFFECTED</div></div>
+            </div>
+            <canvas id="globe" width="620" height="420"></canvas>
+            <div id="info-bar">Hover over a failure point for details</div>
+            <div id="legend">
+                <div class="leg-item"><div class="leg-dot" style="background:#e24b4a;box-shadow:0 0 8px #e24b4a88;"></div> Phase III failure</div>
+                <div class="leg-item"><div class="leg-dot" style="background:#ef9f27;box-shadow:0 0 8px #ef9f2788;"></div> Safety withdrawal</div>
+                <div class="leg-item"><div class="leg-dot" style="background:#378add;box-shadow:0 0 8px #378add88;"></div> Efficacy miss</div>
+                <div class="leg-item"><div class="leg-dot" style="background:#00ffcc;box-shadow:0 0 8px #00ffcc88;"></div> Regulatory rejection</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('globe');
+const ctx = canvas.getContext('2d');
+const W = 620, H = 420, R = 175, CX = W/2, CY = H/2;
+
+const FAILURE_TYPES = [
+  { label: 'Phase III failure',    color: '#e24b4a' },
+  { label: 'Safety withdrawal',    color: '#ef9f27' },
+  { label: 'Efficacy miss',        color: '#378add' },
+  { label: 'Regulatory rejection', color: '#00ffcc' },
+];
+
+const DRUG_NAMES = ['Venlacept','Oritazumab','Dexoflarin','Calprexib','Morvitinib','Synthalox',
+                    'Trebucizine','Flexatrol','Neovirax','Cardiplex','Plexivon','Atorvitol',
+                    'Nexaphen','Rivazone','Omiracetam'];
+
+function randomEvents(n) {
+  const arr = [];
+  for (let i = 0; i < n; i++) {
+    arr.push({
+      lat: (Math.random() * 140) - 70,
+      lon: (Math.random() * 360) - 180,
+      type: Math.floor(Math.random() * 4),
+      drug: DRUG_NAMES[Math.floor(Math.random() * DRUG_NAMES.length)],
+      phase: ['II','III','III','IV'][Math.floor(Math.random()*4)],
+      year: 2019 + Math.floor(Math.random() * 6),
+      id: i
+    });
+  }
+  return arr;
+}
+
+let events = randomEvents(42);
+let rotLon = -20, rotLat = 20;
+let dragging = false, lastX = 0, lastY = 0;
+let autoRot = true;
+let hovered = null;
+let pulseT = 0;
+
+document.getElementById('total-count').textContent = events.length;
+document.getElementById('crit-count').textContent = events.filter(e => e.type === 0).length;
+const lons = new Set(events.map(e => Math.round(e.lon / 40)));
+document.getElementById('regions-count').textContent = lons.size + 3;
+
+function latLonToXYZ(lat, lon) {
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = (lon + 180) * Math.PI / 180;
+  return {
+    x: R * Math.sin(phi) * Math.cos(theta),
+    y: -R * Math.cos(phi),
+    z: R * Math.sin(phi) * Math.sin(theta),
+  };
+}
+
+function rotatePoint(p, latR, lonR) {
+  const lRad = lonR * Math.PI / 180;
+  const x1 = p.x * Math.cos(lRad) - p.z * Math.sin(lRad);
+  const z1 = p.x * Math.sin(lRad) + p.z * Math.cos(lRad);
+  const y1 = p.y;
+  const tRad = latR * Math.PI / 180;
+  const y2 = y1 * Math.cos(tRad) - z1 * Math.sin(tRad);
+  const z2 = y1 * Math.sin(tRad) + z1 * Math.cos(tRad);
+  return { x: x1, y: y2, z: z2 };
+}
+
+function drawGlobe() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Globe atmosphere glow
+  const atmo = ctx.createRadialGradient(CX, CY, R * 0.9, CX, CY, R * 1.15);
+  atmo.addColorStop(0, 'rgba(0,255,204,0.04)');
+  atmo.addColorStop(1, 'rgba(0,255,204,0)');
+  ctx.beginPath();
+  ctx.arc(CX, CY, R * 1.15, 0, Math.PI * 2);
+  ctx.fillStyle = atmo;
+  ctx.fill();
+
+  // Globe body
+  const grd = ctx.createRadialGradient(CX - R*0.3, CY - R*0.3, R * 0.1, CX, CY, R);
+  grd.addColorStop(0, '#0d1f3c');
+  grd.addColorStop(0.5, '#06101e');
+  grd.addColorStop(1, '#020b14');
+  ctx.beginPath();
+  ctx.arc(CX, CY, R, 0, Math.PI * 2);
+  ctx.fillStyle = grd;
+  ctx.fill();
+
+  // Latitude lines
+  for (let lat = -60; lat <= 60; lat += 30) {
+    ctx.beginPath();
+    let first = true;
+    for (let lon = -180; lon <= 180; lon += 3) {
+      const p = latLonToXYZ(lat, lon);
+      const r = rotatePoint(p, rotLat, rotLon);
+      if (r.z < 0) { first = true; continue; }
+      const sx = CX + r.x, sy = CY + r.y;
+      if (first) { ctx.moveTo(sx, sy); first = false; } else ctx.lineTo(sx, sy);
+    }
+    ctx.strokeStyle = 'rgba(0,255,204,0.10)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  // Longitude lines
+  for (let lon = -180; lon < 180; lon += 30) {
+    ctx.beginPath();
+    let first = true;
+    for (let lat = -80; lat <= 80; lat += 3) {
+      const p = latLonToXYZ(lat, lon);
+      const r = rotatePoint(p, rotLat, rotLon);
+      if (r.z < 0) { first = true; continue; }
+      const sx = CX + r.x, sy = CY + r.y;
+      if (first) { ctx.moveTo(sx, sy); first = false; } else ctx.lineTo(sx, sy);
+    }
+    ctx.strokeStyle = 'rgba(0,255,204,0.07)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  // Globe rim
+  ctx.beginPath();
+  ctx.arc(CX, CY, R, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(0,255,204,0.20)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Continent dots
+  const continents = [
+    ...Array.from({length:32},(_,i)=>({lat:35+Math.random()*20, lon:-100+Math.random()*40})),
+    ...Array.from({length:24},(_,i)=>({lat:-15+Math.random()*30, lon:-65+Math.random()*25})),
+    ...Array.from({length:24},(_,i)=>({lat:48+Math.random()*12, lon:5+Math.random()*25})),
+    ...Array.from({length:32},(_,i)=>({lat:-5+Math.random()*40, lon:20+Math.random()*30})),
+    ...Array.from({length:42},(_,i)=>({lat:30+Math.random()*30, lon:70+Math.random()*70})),
+    ...Array.from({length:20},(_,i)=>({lat:-25+Math.random()*20, lon:120+Math.random()*30})),
+  ];
+  for (const c of continents) {
+    const p = latLonToXYZ(c.lat, c.lon);
+    const r = rotatePoint(p, rotLat, rotLon);
+    if (r.z < 0) continue;
+    ctx.beginPath();
+    ctx.arc(CX + r.x, CY + r.y, 1.6, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 200, 120, 0.45)';
+    ctx.fill();
+  }
+
+  // Events
+  const visible = [];
+  for (const ev of events) {
+    const p = latLonToXYZ(ev.lat, ev.lon);
+    const r = rotatePoint(p, rotLat, rotLon);
+    if (r.z < 0) continue;
+    const sx = CX + r.x, sy = CY + r.y;
+    const col = FAILURE_TYPES[ev.type].color;
+    const isHov = hovered && hovered.id === ev.id;
+    const pulse = (Math.sin(pulseT * 0.05 + ev.id * 0.7) + 1) / 2;
+
+    // Pulse ring
+    const pr = 5 + pulse * 8;
+    ctx.beginPath();
+    ctx.arc(sx, sy, pr, 0, Math.PI * 2);
+    ctx.strokeStyle = col + Math.floor((0.15 + pulse * 0.2) * 255).toString(16).padStart(2,'0');
+    ctx.lineWidth = isHov ? 2 : 1;
+    ctx.stroke();
+
+    // Dot
+    ctx.beginPath();
+    ctx.arc(sx, sy, isHov ? 7 : 4, 0, Math.PI * 2);
+    ctx.fillStyle = col;
+    ctx.shadowBlur = isHov ? 16 : 8;
+    ctx.shadowColor = col;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Inner bright
+    ctx.beginPath();
+    ctx.arc(sx, sy, isHov ? 3 : 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.globalAlpha = 0.75;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    visible.push({ ev, sx, sy });
+  }
+
+  // Hover label
+  if (hovered) {
+    const p = latLonToXYZ(hovered.lat, hovered.lon);
+    const r = rotatePoint(p, rotLat, rotLon);
+    if (r.z >= 0) {
+      const sx = CX + r.x, sy = CY + r.y;
+      const col = FAILURE_TYPES[hovered.type].color;
+      const bw = 178, bh = 56;
+      const bx = sx > CX ? sx + 12 : sx - 12 - bw;
+      const by = Math.max(8, Math.min(sy - 28, H - bh - 8));
+      ctx.fillStyle = 'rgba(4,12,24,0.95)';
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, bh, 8);
+      ctx.fill();
+      ctx.strokeStyle = col + 'bb';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.font = '600 13px "Share Tech Mono", monospace';
+      ctx.fillText(hovered.drug, bx + 12, by + 20);
+      ctx.fillStyle = '#7090b0';
+      ctx.font = '11px "Share Tech Mono", monospace';
+      ctx.fillText(FAILURE_TYPES[hovered.type].label, bx + 12, by + 36);
+      ctx.fillStyle = '#445566';
+      ctx.fillText('Phase ' + hovered.phase + ' · ' + hovered.year, bx + 12, by + 50);
+    }
+  }
+  return visible;
+}
+
+let globeVisibleCache = [];
+function loop() {
+  if (autoRot) rotLon += 0.15;
+  pulseT++;
+  globeVisibleCache = drawGlobe();
+  requestAnimationFrame(loop);
+}
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (W / rect.width);
+  const my = (e.clientY - rect.top) * (H / rect.height);
+  let found = null;
+  for (const {ev, sx, sy} of globeVisibleCache) {
+    if (Math.hypot(mx - sx, my - sy) < 14) { found = ev; break; }
+  }
+  hovered = found;
+  document.getElementById('info-bar').textContent = found
+    ? found.drug + ' — ' + FAILURE_TYPES[found.type].label + ' · Phase ' + found.phase + ' (' + found.year + ')'
+    : 'Hover over a failure point for details';
+  canvas.style.cursor = found ? 'pointer' : 'grab';
+});
+
+canvas.addEventListener('mousedown', e => {
+  dragging = true; autoRot = false;
+  const rect = canvas.getBoundingClientRect();
+  lastX = (e.clientX - rect.left) * (W / rect.width);
+  lastY = (e.clientY - rect.top) * (H / rect.height);
+  canvas.style.cursor = 'grabbing';
+});
+canvas.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (W / rect.width);
+  const my = (e.clientY - rect.top) * (H / rect.height);
+  rotLon += (mx - lastX) * 0.4;
+  rotLat += (my - lastY) * 0.4;
+  rotLat = Math.max(-80, Math.min(80, rotLat));
+  lastX = mx; lastY = my;
+});
+canvas.addEventListener('mouseup', () => { dragging = false; canvas.style.cursor = 'grab'; });
+canvas.addEventListener('mouseleave', () => { dragging = false; hovered = null; canvas.style.cursor = 'default'; });
+canvas.style.cursor = 'grab';
+
+loop();
+</script>
+</body>
+</html>

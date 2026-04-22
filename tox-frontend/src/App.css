@@ -1,0 +1,10 @@
+/* App-level layout — all design tokens live in index.css */
+
+.app-page {
+  opacity: 0;
+  transition: opacity 1s ease 0.3s;
+}
+
+.app-page--visible {
+  opacity: 1;
+}

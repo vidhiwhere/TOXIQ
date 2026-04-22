@@ -1,0 +1,11 @@
+pandas
+numpy
+rdkit
+xgboost
+shap
+fastapi
+uvicorn
+python-multipart
+scikit-learn
+matplotlib
+Pillow

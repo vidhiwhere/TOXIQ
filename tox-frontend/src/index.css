@@ -1,0 +1,95 @@
+/* ============================================================
+   ToxIQ Design Tokens — Titanium Purple Theme
+   ============================================================ */
+:root {
+  --c-bg:          #05050a;
+  --c-surface:     #0d0b16;
+  --c-purple:      #9b7fd4;
+  --c-purple-lt:   #c4a8ff;
+  --c-purple-dk:   #6a4fb0;
+  --c-grey:        #6b6880;
+  --c-grey-lt:     #a09cb8;
+  --c-text:        #e8e0ff;
+  --c-text-dim:    #7a7490;
+  --c-white:       #ffffff;
+  --c-border:      rgba(155, 127, 212, 0.15);
+  --c-glow:        rgba(155, 127, 212, 0.35);
+
+  --font-sans:  'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:  'SF Mono', 'Courier New', monospace;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Utility ---- */
+.section-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--c-purple);
+  background: rgba(155,127,212,0.1);
+  border: 1px solid var(--c-border);
+  padding: 0.3rem 0.9rem;
+  border-radius: 999px;
+  margin-bottom: 1.2rem;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, var(--c-purple-dk), var(--c-purple));
+  color: #fff;
+  border: none;
+  padding: 0.8rem 2rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.3s var(--ease-out);
+  box-shadow: 0 0 24px var(--c-glow);
+  text-decoration: none;
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px var(--c-glow);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  color: var(--c-purple-lt);
+  border: 1px solid var(--c-border);
+  padding: 0.8rem 2rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s var(--ease-out);
+}
+.btn-ghost:hover {
+  background: rgba(155,127,212,0.1);
+  border-color: var(--c-purple);
+}
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--c-bg); }
+::-webkit-scrollbar-thumb { background: var(--c-purple-dk); border-radius: 3px; }
