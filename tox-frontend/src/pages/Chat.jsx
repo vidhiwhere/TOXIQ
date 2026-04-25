@@ -8,7 +8,7 @@ export default function Chat() {
   const [messages, setMessages] = useState([
     {
       role: 'bot',
-      content: 'Hello! I am the ToxIQ AI Assistant. Tell me the name of a molecule (e.g., "Aspirin" or "Caffeine") to fetch its real-time profile from PubChem and ChEMBL.'
+      content: 'Hello! I am the **ToxIQ AI Assistant**. Enter a molecule name (e.g., *Aspirin*, *Caffeine*, *Paclitaxel*) to fetch its real-time chemical profile from PubChem, ChEMBL, Wikipedia, and openFDA.'
     }
   ])
   const [inputVal, setInputVal] = useState('')
@@ -23,11 +23,22 @@ export default function Chat() {
     scrollToBottom()
   }, [messages])
 
+  // Extract a molecule name from natural-language input
+  const extractMoleculeName = (text) => {
+    const cleaned = text
+      .replace(/^(is|what is|tell me about|lookup|search|find|show me|analyse|analyze|describe|explain)\s+/i, '')
+      .replace(/\s+(safe|toxic|dangerous|safe\?|toxic\?|dangerous\?|profile|data|info|information|details|properties|structure)\s*\??$/i, '')
+      .replace(/\?$/, '')
+      .trim()
+    return cleaned
+  }
+
   const handleSend = async (e) => {
     e.preventDefault()
     if (!inputVal.trim()) return
 
     const userMessage = inputVal.trim()
+    const moleculeName = extractMoleculeName(userMessage)
     setMessages(prev => [...prev, { role: 'user', content: userMessage }])
     setInputVal('')
     setLoading(true)
@@ -38,7 +49,7 @@ export default function Chat() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ molecule_name: userMessage, message: '' })
+        body: JSON.stringify({ molecule_name: moleculeName, message: '' })
       })
 
       const data = await res.json()
@@ -50,10 +61,13 @@ export default function Chat() {
           image: data.image_base64
         }])
       } else {
-        setMessages(prev => [...prev, { role: 'bot', content: data.message }])
+        setMessages(prev => [...prev, { 
+          role: 'bot', 
+          content: `I couldn't find data for **"${moleculeName}"**. Try a specific molecule name like *Aspirin*, *Caffeine*, *Ibuprofen*, or *Paclitaxel*.`
+        }])
       }
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'bot', content: 'Sorry, I encountered an error connecting to the backend servers. Please try again.' }])
+      setMessages(prev => [...prev, { role: 'bot', content: '⚠️ Error connecting to the ToxIQ backend. Please ensure the API server is running.' }])
     } finally {
       setLoading(false)
     }
@@ -110,6 +124,27 @@ export default function Chat() {
                 </div>
               )}
               <div ref={messagesEndRef} />
+            </div>
+
+            <div style={{ padding: '0.5rem 1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              {[
+                { label: '💊 Aspirin', mol: 'Aspirin' },
+                { label: '☕ Caffeine', mol: 'Caffeine' },
+                { label: '⚗️ Bisphenol A', mol: 'Bisphenol A' },
+                { label: '🧬 Paclitaxel', mol: 'Paclitaxel' },
+                { label: '💉 Ibuprofen', mol: 'Ibuprofen' },
+              ].map(({ label, mol }, idx) => (
+                <button key={idx} onClick={() => setInputVal(mol)}
+                  style={{
+                    background: 'rgba(155,77,255,0.1)', border: '1px solid rgba(155,77,255,0.2)', color: '#c8d8ff',
+                    padding: '0.35rem 0.75rem', borderRadius: 16, fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(155,77,255,0.25)'; e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = '#9b4dff' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(155,77,255,0.1)'; e.currentTarget.style.color = '#c8d8ff'; e.currentTarget.style.borderColor = 'rgba(155,77,255,0.2)' }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
 
             <form className="chat-input-area" onSubmit={handleSend}>

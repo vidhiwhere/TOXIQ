@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import * as THREE from 'three/webgpu'
 import { float, If, PI, color, cos, instanceIndex, Loop, mix, mod, sin, instancedArray, Fn, uint, uniform, uniformArray, hash, vec3, vec4 } from 'three/tsl'
 import { OrbitControls } from 'three-stdlib'
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts'
+import DecisionBanner from '../components/DecisionBanner'
+import LipinskiCard from '../components/LipinskiCard'
+import AdmetCard from '../components/AdmetCard'
+import HistoryPanel, { saveToHistory } from '../components/HistoryPanel'
+import ScaffoldPicker from '../components/ScaffoldPicker'
 
 import './Predict.css'
 
@@ -23,12 +28,24 @@ export default function Predict() {
   const [compareLoading, setCompareLoading] = useState(false)
   const [compareError, setCompareError] = useState(null)
 
+  // New feature state
+  const [showHistory, setShowHistory] = useState(false)
+  const [showScaffold, setShowScaffold] = useState(false)
+  const [batchFile, setBatchFile] = useState(null)
+  const [batchResults, setBatchResults] = useState(null)
+  const [batchLoading, setBatchLoading] = useState(false)
+  const [batchError, setBatchError] = useState(null)
+  const [similarResults, setSimilarResults] = useState(null)
+  const [similarLoading, setSimilarLoading] = useState(false)
+  const batchRef = useRef(null)
+
   const handlePredict = async (e) => {
     e.preventDefault()
     if (!smiles.trim()) return
     setLoading(true)
     setError(null)
     setResult(null)
+    setSimilarResults(null)
     try {
       const res = await fetch('http://127.0.0.1:8000/api/predict', {
         method: 'POST',
@@ -38,16 +55,52 @@ export default function Predict() {
       if (!res.ok) throw new Error('Prediction failed')
       const data = await res.json()
       setResult(data)
-      
-      setTimeout(() => {
-        dashboardRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }, 100)
+      saveToHistory(smiles, data)
+      setTimeout(() => { dashboardRef.current?.scrollIntoView({ behavior: 'smooth' }) }, 100)
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
   }
+
+  const handleBatch = async () => {
+    if (!batchFile) return
+    setBatchLoading(true)
+    setBatchError(null)
+    setBatchResults(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', batchFile)
+      const res = await fetch('http://127.0.0.1:8000/api/batch', { method: 'POST', body: fd })
+      if (!res.ok) throw new Error('Batch prediction failed')
+      const data = await res.json()
+      setBatchResults(data)
+      setTimeout(() => { batchRef.current?.scrollIntoView({ behavior: 'smooth' }) }, 100)
+    } catch (err) {
+      setBatchError(err.message)
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
+  const handleSimilar = async () => {
+    if (!smiles.trim()) return
+    setSimilarLoading(true)
+    setSimilarResults(null)
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/similar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ smiles, top_k: 5 })
+      })
+      const data = await res.json()
+      setSimilarResults(data.similar || [])
+    } catch {}
+    finally { setSimilarLoading(false) }
+  }
+
+  const handleExportPDF = () => { window.print() }
 
   // Draw the SHAP highlighted molecule when result updates
   useEffect(() => {
@@ -447,6 +500,20 @@ export default function Predict() {
 
   return (
     <div className="predict-page-wrapper">
+      {showHistory && (
+        <HistoryPanel
+          onSelect={(s) => { setSmiles(s); setShowHistory(false) }}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
+
+      {/* TOOLBAR */}
+      <div className="predict-toolbar">
+        <button className="toolbar-btn" onClick={() => setShowHistory(h => !h)}>🕓 History</button>
+        <button className="toolbar-btn" onClick={() => setShowScaffold(s => !s)}>🧱 Scaffolds</button>
+        <button className="toolbar-btn toolbar-btn--pdf" onClick={handleExportPDF}>📄 Export PDF</button>
+      </div>
+
       {/* 1. HERO GRAPHIC SECTION */}
       <div className="predict-container" ref={containerRef}>
         <div className="predict-overlay">
@@ -495,6 +562,27 @@ export default function Predict() {
           {error && <div className="predict-error-msg" style={{ color: '#ff3366', marginTop: '1rem' }}>{error}</div>}
         </div>
 
+        {/* Batch CSV Card */}
+        <div className="glass-panel">
+          <h2 className="predict-title" style={{ fontSize: '1.5rem', marginBottom: '0.5rem', color: '#f5a623' }}>📁 Batch Screening</h2>
+          <p style={{ color: '#a0a0b0', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Upload a CSV with a <code style={{color:'#f5a623'}}>smiles</code> column to screen multiple compounds at once.</p>
+          <input
+            type="file" accept=".csv"
+            onChange={e => setBatchFile(e.target.files[0])}
+            style={{ marginBottom: '1rem', color: '#a0a0b0', fontSize: '0.85rem', width: '100%' }}
+          />
+          <button
+            className="action-btn action-btn--gold"
+            onClick={handleBatch}
+            disabled={!batchFile || batchLoading}
+            style={{ width: '100%' }}
+          >
+            {batchLoading ? <span style={{display:'flex',alignItems:'center',gap:8,justifyContent:'center'}}><span className="spinner"></span> Screening...</span>
+              : <span style={{display:'flex',alignItems:'center',gap:10,justifyContent:'center'}}><span>📁</span> Run Batch Screen</span>}
+          </button>
+          {batchError && <div style={{ color: '#ff3366', marginTop: '0.75rem', fontSize: '0.85rem' }}>{batchError}</div>}
+        </div>
+
         {/* Dual Molecule Card */}
         <div className="glass-panel">
           <h2 className="predict-title" style={{ fontSize: '1.5rem', marginBottom: '0.5rem', color: '#00ffcc' }}>A/B Screening Chamber</h2>
@@ -537,23 +625,65 @@ export default function Predict() {
         </div>
       </div>
 
+      {/* SCAFFOLD PICKER */}
+      {showScaffold && (
+        <div style={{ padding: '0 2rem', maxWidth: 1400, margin: '0 auto' }}>
+          <ScaffoldPicker onSelect={(s) => { setSmiles(s); setShowScaffold(false) }} />
+        </div>
+      )}
+
+      {/* BATCH RESULTS */}
+      {batchResults && (
+        <div className="predict-dashboard-section" ref={batchRef}>
+          <h2 className="dashboard-title">📁 Batch Screening Results <span style={{color:'#f5a623', fontSize:'1rem'}}>({batchResults.count} compounds)</span></h2>
+          <div style={{ overflowX: 'auto', marginTop: '1rem' }}>
+            <table className="compare-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid rgba(255,255,255,0.1)', color: '#a0a0b0', fontSize: '0.8rem', textTransform: 'uppercase' }}>
+                  {['Name','SMILES','Decision','Confidence','Max Tox','Toxic Assays','Drug-like','Top Assay','PAINS'].map(h => (
+                    <th key={h} style={{ padding: '0.9rem 0.75rem', textAlign: 'left' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {batchResults.results.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', backgroundColor: i%2===0?'rgba(255,255,255,0.015)':'transparent' }}>
+                    <td style={{ padding: '0.75rem', color: '#c8d8ff', fontWeight: 600 }}>{r.name}</td>
+                    <td style={{ padding: '0.75rem', color: '#666677', fontFamily: 'monospace', fontSize: '0.75rem', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.smiles}</td>
+                    <td style={{ padding: '0.75rem' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.8rem', color: r.decision==='Proceed'?'#00ffcc':r.decision==='Reject'?'#ff3366':'#f5a623' }}>
+                        {r.decision==='Proceed'?'✅':r.decision==='Reject'?'❌':'⚠️'} {r.decision || 'Error'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '0.75rem', color: '#fff' }}>{r.confidence_score ? `${(r.confidence_score*100).toFixed(0)}%` : '—'}</td>
+                    <td style={{ padding: '0.75rem', color: r.max_prob>=0.5?'#ff3366':'#00ffcc', fontWeight: 700 }}>{r.max_prob ? `${(r.max_prob*100).toFixed(1)}%` : '—'}</td>
+                    <td style={{ padding: '0.75rem', color: r.toxic_count>0?'#ff3366':'#00ffcc' }}>{r.toxic_count !== undefined ? `${r.toxic_count}/12` : '—'}</td>
+                    <td style={{ padding: '0.75rem', color: r.lipinski_pass?'#00ffcc':'#ff3366' }}>{r.lipinski_pass !== undefined ? (r.lipinski_pass?'✅':'❌') : '—'}</td>
+                    <td style={{ padding: '0.75rem', color: '#a0a0b0', fontSize: '0.8rem' }}>{r.top_assay || '—'}</td>
+                    <td style={{ padding: '0.75rem', color: r.pains_alert?'#f5a623':'#666677', fontSize: '0.78rem' }}>{r.pains_alert || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* 4. SINGLE RESULTS DASHBOARD SECTION */}
       {result && (
         <div className="predict-dashboard-section" ref={dashboardRef}>
           <div className="dashboard-header-container">
             <h2 className="dashboard-title">Prediction Dashboard</h2>
-            <div className="confidence-score-badge">
-              <span className="confidence-label">Final Risk Level:</span>
-              <span className={`confidence-value risk-level ${riskData.class}`}>
-                {riskData.label} 
-              </span>
-              <span className="confidence-label" style={{marginLeft: '1rem'}}>| Highest Confidence:</span>
-              <span className="confidence-value" style={{color: '#fff'}}>
-                {(maxProb * 100).toFixed(1)}% ({topAssay[0]})
-              </span>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={handleSimilar} disabled={similarLoading} className="toolbar-btn" style={{ fontSize: '0.8rem' }}>
+                {similarLoading ? '⏳ Searching...' : '🔍 Similar Molecules'}
+              </button>
             </div>
           </div>
-          
+
+          {/* DECISION BANNER */}
+          <DecisionBanner decision={result.decision} confidence={result.confidence_score} top3={result.top3_risks} />
+
           <div className="dashboard-summary-box">
             <div className="summary-icon">ℹ</div>
             <div className="summary-text">
@@ -567,6 +697,53 @@ export default function Predict() {
               <div className="pains-text">
                 <strong>PAINS Alert (Pan Assay Interference Compounds):</strong> {result.pains_alert}
                 <br/><small>This structure contains features known to cause false positives in biological screening assays.</small>
+              </div>
+            </div>
+          )}
+
+          {/* Lipinski + ADMET row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: '1.5rem 0' }}>
+            <LipinskiCard lipinski={result.lipinski} />
+            <AdmetCard admet={result.admet} />
+          </div>
+
+          {/* SHAP Text Explanation */}
+          {result.shap_text && (
+            <div className="dashboard-summary-box" style={{ borderLeftColor: '#9b4dff', borderColor: '#9b4dff33', marginBottom: '1.5rem' }}>
+              <div className="summary-icon" style={{ background: 'rgba(155,77,255,0.15)', color: '#9b4dff' }}>🧠</div>
+              <div className="summary-text">
+                <strong>SHAP Explanation:</strong> {result.shap_text}
+              </div>
+            </div>
+          )}
+
+          {/* Improvement Suggestions */}
+          {result.suggestions && result.suggestions.length > 0 && (
+            <div className="dashboard-panel" style={{ marginBottom: '1.5rem', borderLeft: '3px solid #f5a623' }}>
+              <h3 style={{ color: '#f5a623', marginBottom: '0.75rem' }}>💡 Molecule Improvement Suggestions</h3>
+              <ul style={{ paddingLeft: '1.25rem', margin: 0 }}>
+                {result.suggestions.map((s, i) => (
+                  <li key={i} style={{ color: '#c8d8ff', fontSize: '0.88rem', marginBottom: '0.5rem', lineHeight: 1.5 }}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Similar Molecules */}
+          {similarResults && similarResults.length > 0 && (
+            <div className="dashboard-panel" style={{ marginBottom: '1.5rem' }}>
+              <h3>🔍 Similar Molecules (Tox21 Dataset)</h3>
+              <p style={{ color: '#a0a0b0', fontSize: '0.82rem', marginBottom: '1rem' }}>Based on Morgan fingerprint Tanimoto similarity.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
+                {similarResults.map((m, i) => (
+                  <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(155,77,255,0.2)', borderRadius: 10, padding: '0.75rem', cursor: 'pointer', transition: 'border-color 0.2s' }}
+                    onClick={() => setSmiles(m.smiles)}
+                    title="Click to load this SMILES">
+                    {m.image_base64 && <img src={`data:image/png;base64,${m.image_base64}`} alt="mol" style={{ width: '100%', borderRadius: 6, background: '#fff', marginBottom: '0.5rem' }} />}
+                    <div style={{ color: '#9b4dff', fontWeight: 700, fontSize: '0.82rem', marginBottom: '0.25rem' }}>Similarity: {(m.similarity * 100).toFixed(1)}%</div>
+                    <div style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#666677', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.smiles}</div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

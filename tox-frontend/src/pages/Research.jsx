@@ -118,6 +118,27 @@ export default function Research() {
   const containerRef = useRef(null)
   const cardsRef = useRef([])
   const [activeArticle, setActiveArticle] = useState(null)
+  
+  // PubMed Search State
+  const [searchQuery, setSearchQuery] = useState('')
+  const [pubmedResults, setPubmedResults] = useState([])
+  const [searchLoading, setSearchLoading] = useState(false)
+
+  const handleSearch = async (e) => {
+    e.preventDefault()
+    if (!searchQuery.trim()) return
+    setSearchLoading(true)
+    try {
+      const res = await fetch('http://127.0.0.1:8000/api/pubmed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: searchQuery })
+      })
+      const data = await res.json()
+      setPubmedResults(data.articles || [])
+    } catch {}
+    finally { setSearchLoading(false) }
+  }
 
   useEffect(() => {
     // Generate 12 perfectly dispersed zones across a 4x3 grid logic
@@ -185,6 +206,36 @@ export default function Research() {
     <div className="research-page" ref={containerRef}>
       <ResearchBackground />
       <h1 className="research-header">Current Research & Insights</h1>
+      
+      {/* PubMed Search Bar */}
+      <div style={{ position: 'relative', zIndex: 100, maxWidth: 600, margin: '0 auto 2rem auto', padding: '0 2rem' }}>
+        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.5rem' }}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search PubMed (e.g., 'Bisphenol A toxicity')"
+            style={{ flex: 1, padding: '0.75rem 1rem', borderRadius: 8, background: 'rgba(10,10,20,0.8)', border: '1px solid rgba(155,77,255,0.4)', color: '#fff', fontSize: '0.9rem' }}
+          />
+          <button type="submit" disabled={searchLoading} style={{ padding: '0 1.5rem', borderRadius: 8, background: 'linear-gradient(135deg, #9b4dff, #00ffcc)', border: 'none', color: '#05050A', fontWeight: 'bold', cursor: 'pointer' }}>
+            {searchLoading ? 'Searching...' : 'Search'}
+          </button>
+        </form>
+      </div>
+
+      {pubmedResults.length > 0 && (
+        <div style={{ position: 'relative', zIndex: 100, maxWidth: 800, margin: '0 auto 2rem auto', background: 'rgba(15,15,25,0.85)', padding: '1.5rem', borderRadius: 16, border: '1px solid rgba(155,77,255,0.3)', backdropFilter: 'blur(10px)' }}>
+          <h3 style={{ color: '#00ffcc', marginBottom: '1rem', marginTop: 0 }}>PubMed Results</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {pubmedResults.map((article, idx) => (
+              <div key={idx} style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: 8, borderLeft: '3px solid #9b4dff' }}>
+                <a href={article.url} target="_blank" rel="noopener noreferrer" style={{ color: '#c8d8ff', fontSize: '1.05rem', fontWeight: 600, textDecoration: 'none', display: 'block', marginBottom: '0.4rem' }}>{article.title}</a>
+                <div style={{ color: '#a0a0b0', fontSize: '0.8rem' }}>{article.authors} • <strong>{article.journal}</strong> ({article.year})</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       
       <div className={`research-particles-container ${activeArticle ? 'blurred' : ''}`}>
         {articles.map((article, i) => (
