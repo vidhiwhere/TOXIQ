@@ -8,13 +8,14 @@ ToxIQ predicts whether a drug molecule is toxic across 12 biological assays from
 Traditional toxicity testing takes weeks and costs millions. ToxIQ does it instantly and explains *why* a molecule is flagged using SHAP atom-level highlighting, allowing researchers to optimize molecular structures rapidly.
 
 ## Features
-- **Toxicity Prediction**: 12 XGBoost classifiers (one per Tox21 assay) with ~0.839 average AUC.
+- **Toxicity Prediction**: 12 optimized machine learning models (dynamically selected between XGBoost and Random Forest) with high predictive performance (~0.84 average AUC).
 - **Explainable AI**: SHAP atom-level heatmaps visually highlight toxic substructures.
 - **Pharmacokinetic Profiling**: Automated ADMET and Lipinski Rule of 5 evaluations.
 - **AI Assistant**: Conversational agent providing insights from PubMed, PubChem, ChEMBL, and FDA Adverse Events.
 - **Batch Processing**: Upload CSV files for high-throughput toxicity screening of multiple compounds.
 - **Similarity Search**: Find structurally similar compounds within the Tox21 database.
-- **Premium Interface**: A modern, responsive React frontend with 3D molecular visualizations.
+- **Global Drug Failure Map**: Interactive geospatial visualization of clinical trial outcomes.
+- **Premium Interface**: A modern, responsive React frontend with 3D molecular visualizations and immersive research-grade video backgrounds.
 
 ## How to run
 
@@ -76,4 +77,4 @@ If you need to retrain the XGBoost and SHAP models:
 ## Tech stack
 - **Frontend**: React, Vite, Three.js (React Three Fiber), GSAP
 - **Backend**: FastAPI, Python
-- **Machine Learning**: RDKit, XGBoost, SHAP, scikit-learn
+- **Machine Learning**: RDKit, XGBoost, Random Forest, SHAP, scikit-learn
